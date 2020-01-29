@@ -1,0 +1,140 @@
+---
+title: "Regression Models Project-Coursera"
+author: "WNH"
+date: "January 20, 2020"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+This is a regression analysis that tries to respond to the following 2 questions:
+1.Is an automatic or manual transmission better for MPG ? 
+2.Quantify the MPG difference between automatic and manual transmissions
+
+# Executive Summary
+Based on mtcars small dataset analysis we can conclude:
+on average, automatic transmission cars consume more fuel then manual transmission ones, with 7.24 gallons more (24.39 - 17.15, the 2 Manual Transmission and Automatic means)
+this estimation has a confidence interval of [3.21 , 11.28]
+the adjusted estimate for the expected change in mpg from Automatic to Manual Transmission is +0.1765 gallons
+
+```{r global_options}
+knitr::opts_chunk$set(echo = FALSE,message=FALSE,warnings=FALSE)
+library(ggplot2)
+library(GGally)
+```
+
+## Loading mtcars dataset
+
+```{r }
+require(datasets)
+data("mtcars")
+head(mtcars)
+str(mtcars)
+```
+## Exploratory Data Analysis
+```{r}
+mpg.manual <- mtcars[mtcars$am=="1",]$mpg
+mpg.auto<- mtcars[mtcars$am=="0",]$mpg
+t.test(mpg.manual, mpg.auto)
+```
+As the p-value is 0.001374 well bellow 5% or 1%, the alternative hypothesis is true: the difference in means is not equal to 0. So, the mean mileage of automatic transmission is 17.15 mpg and the manual transmission is 24.39 mpg.
+The 95% confidence interval of the difference in mean gas mileage is between 3.21 and 11.28 mpg. We could say that manual transmission could be better than automatic transmission for MPG.
+
+```{r}
+boxplot(mpg ~ am, data=mtcars, xlab="Transmission Type", ylab="Miles per Gallon",
+        main="Automatic versus Manual Transmission MPG")
+```
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+knitr::opts_chunk$set(echo = FALSE,message=FALSE,warnings=FALSE)
+g<-ggpairs(mtcars,lower=(list(continuous=wrap("smooth", method="loess",color="blue"))))
+g
+```
+
+# Creating labelled factor variables for the categorical variables
+```{r}
+mtcars$vs<-factor(mtcars$vs, labels=c("0V-shaped","1straight"))
+mtcars$am<-factor(mtcars$am,labels=c("Automatic","Manual"))
+mtcars$gear<-as.factor(mtcars$gear)
+mtcars$carb<-as.factor(mtcars$carb)
+head(mtcars)
+```
+We want to explain the data in the simplest way - redundant predictors should be removed. The principle of Occam's Razor states that among several plausible explanations for a phenomenon, thecsimplest is best. Applied to regression analysis, this implies that the smallest model that fits the data is best.
+
+# Model Selection
+```{r}
+library(gridExtra)
+plot1<-ggplot(mtcars,aes(x=cyl,y=mpg,color=cyl)) + geom_point()+facet_grid(~am)
+plot2<-ggplot(mtcars,aes(x=disp, y=mpg,color=disp))+geom_point()+facet_grid(~am)
+plot3<-ggplot(mtcars,aes(x=wt, y=mpg,color=wt))+geom_point()+facet_grid(~am)
+plot4<-ggplot(mtcars,aes(x=gear,y=mpg,color=gear))+geom_point()+facet_grid(~am)
+grid.arrange(plot1,plot2,plot3,plot4,ncol=2,nrow=2)
+```
+
+```{r}
+library(car)
+fitvif <- lm(mpg ~ cyl+disp+hp+drat+wt+qsec+factor(vs)+factor(am)+gear+carb, data = mtcars)
+kable(vif(fitvif),align = 'c')
+```
+
+Predictor Selection
+Forward Selection
+
+1. Start with no variables in the model.
+2. For all predictors not in the model, check their p-value if they are added to the model. Choose the one with lowest p-value less than ??crit.
+3.Continue until no new predictors can be added.
+
+```{r}
+g1<-lm(mpg~am,mtcars)
+g2<-lm(mpg~am+cyl,mtcars)
+g3<-lm(mpg~am+cyl+disp,mtcars)
+g4<-lm(mpg~am+cyl+disp+wt,mtcars)
+g5<-lm(mpg~am+cyl+disp+wt+gear,mtcars)
+g6<-lm(mpg~am+wt+am*wt,mtcars)
+g7<-lm(mpg~am+cyl+disp+wt+am*wt,mtcars)
+g8<-lm(mpg~am+wt,mtcars)
+g9<-lm(mpg~am+cyl+wt,mtcars)
+
+table(c(summary(g1)$adj.r.squared,
+summary(g2)$adj.r.squared,
+summary(g3)$adj.r.squared,
+summary(g4)$adj.r.squared,
+summary(g5)$adj.r.squared,
+summary(g6)$adj.r.squared,
+summary(g7)$adj.r.squared,
+summary(g8)$adj.r.squared,
+summary(g9)$adj.r.squared))
+
+anova(g1,g2,g3,g4,g5,g6,g7,g8,g9)
+```
+
+The final addidtion of the am*wt variable is a close call. We may want to consider including this variable if interpretation is aided. Notice that the R2 for the lm(mpg~am) model of 0.360 is increased greatly to 0.878 in the final model. Thus the addition of two predictors causes major improvement in fit.
+
+```{r}
+summary(g1)
+```
+
+```{r}
+finalmodel<-lm(mpg~am+cyl+wt,mtcars)
+summary(finalmodel)
+```
+
+# Conclusion
+In this model, Pr(>|t|) are very close to zero,it shows that there are small p-value for the intercept and the slope,indicating that we there is a relationship between in miles per gallon (mpg) number of cylinders(cyl),and transmision(am). Now when we read the coefficient for am, we say that, on average, manual transmission cars have 2.56 MPGs more than automatic transmission cars,holding that other are constant.
+
+The "Occam's razor" model explains 83% of mpg variance and contains only 3 predictors:
+formula = mpg ~ am + cyl + wt
+amManual estimated coefficient equals now to 0.1765 and represents the adjusted estimate for the expected change in mpg comparing Auto versus Manual for this new model containing 2 other predictors besides am.
+
+amMaual estimated coefficient is the answer to the second question.
+
+Best model residuals are depicted in Regression Dignostics
+First graphic, "Residuals vs. Fitted values" is not quite a straight line, proof of some outliers.
+
+# Regression Dignostics
+
+```{r}
+par(mfrow=c(2,2))
+plot(finalmodel)
+```
+
